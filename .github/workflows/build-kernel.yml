@@ -1,0 +1,43 @@
+name: Build Linux Kernel for Xiaomi Pad 2
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # 支持手动一键触发编译
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git
+
+      - name: Configure kernel
+        run: |
+          make xiaomipad2_defconfig
+
+      - name: Build kernel
+        run: |
+          make -j$(nproc)
+
+      - name: Prepare build artifacts
+        run: |
+          mkdir -p output/boot
+          mkdir -p output/modules
+          
+          # 复制内核镜像
+          cp arch/x86/boot/bzImage output/boot/vmlinuz-linux-latte
+          
+          # 安装模块到指定文件夹
+          make INSTALL_MOD_PATH=../output/modules modules_install
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaomipad2-kernel-artifacts
+          path: output/
