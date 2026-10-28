@@ -3,7 +3,7 @@ name: Build Linux Kernel for Xiaomi Pad 2
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # 支持手动一键触发编译
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,36 +11,42 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git
+          sudo apt-get install -y \
+            build-essential libncurses-dev bison flex libssl-dev libelf-dev \
+            bc git dpkg-dev debhelper rsync kmod cpio fakeroot
 
       - name: Configure kernel
         run: |
           make xiaomipad2_defconfig
+          # 关闭调试信息,避免生成巨大的 -dbg 包、拖慢编译
+          scripts/config --disable DEBUG_INFO
+          scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
+          scripts/config --disable DEBUG_INFO_DWARF4
+          scripts/config --disable DEBUG_INFO_DWARF5
+          scripts/config --enable DEBUG_INFO_NONE
+          make olddefconfig
 
-      - name: Build kernel
+      - name: Build Debian packages
         run: |
-          make -j$(nproc)
+          make -j$(nproc) bindeb-pkg
 
-      - name: Prepare build artifacts
+      - name: Collect artifacts
         run: |
-          mkdir -p output/boot
-          mkdir -p output/modules
-          
-          # 1. 复制内核镜像
-          cp arch/x86/boot/bzImage output/boot/vmlinuz-linux-latte
-          
-          # 2. 复制内核配置文件 (.config)，放置在 boot 目录下方便后续拷贝到 /boot/config-版本号
-          cp .config output/boot/config-kernel
-          
-          # 3. 安装驱动模块到当前仓库内的 output/modules 目录
-          make INSTALL_MOD_PATH=output/modules modules_install
+          mkdir -p output
+          # deb 包生成在仓库上一级目录,必须移进仓库内才能被上传
+          mv ../*.deb output/ || true
+          rm -f output/*-dbg_*.deb
+          ls -lh output/
 
-      - name: Upload kernel artifacts
+      - name: Upload kernel packages
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomipad2-kernel-artifacts
-          path: output/
+          name: xiaomipad2-kernel-debs
+          path: output/*.deb
+          if-no-files-found: error
