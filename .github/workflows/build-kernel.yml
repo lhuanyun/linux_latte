@@ -30,11 +30,14 @@ jobs:
           mkdir -p output/boot
           mkdir -p output/modules
           
-          # 复制内核镜像
+          # 1. 复制内核镜像
           cp arch/x86/boot/bzImage output/boot/vmlinuz-linux-latte
           
-          # 安装模块到指定文件夹
-          make INSTALL_MOD_PATH=../output/modules modules_install
+          # 2. 复制内核配置文件 (.config)，放置在 boot 目录下方便后续拷贝到 /boot/config-版本号
+          cp .config output/boot/config-kernel
+          
+          # 3. 安装驱动模块到当前仓库内的 output/modules 目录
+          make INSTALL_MOD_PATH=output/modules modules_install
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
